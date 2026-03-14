@@ -1,0 +1,31 @@
+{
+  "metadata": {
+    "generated_at": "2026-03-14T01:45:16.124756",
+    "generator": "DB Intelligence Agent v1.0",
+    "database": "sqlite:///./data/olist.db",
+    "total_tables": 0,
+    "total_columns": 0,
+    "total_rows": 0
+  },
+  "ai_schema_summary": "[AI narration unavailable: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CZ1hA4sdAGEiTFNkbNHie'}]",
+  "er_structure": {
+    "nodes": [],
+    "edges": [],
+    "hub_tables": [],
+    "total_relationships": 0,
+    "isolated_tables": []
+  },
+  "table_summaries": {},
+  "data_quality": {},
+  "causal_relationships": [],
+  "health_scores": {},
+  "drift_report": {
+    "drift_detected": false,
+    "severity": "None",
+    "summary": "0 tables added, 0 tables removed, 0 tables modified.",
+    "added_tables": [],
+    "removed_tables": [],
+    "modified_tables": [],
+    "checked_at": "2026-03-14T01:45:14.975124"
+  }
+}
