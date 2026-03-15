@@ -82,13 +82,55 @@ else:
 # ─────────────────────────────────────────────────────────────
 # PAGE SETUP
 # ─────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="🧠 DB Intelligence Agent",
-    page_icon="🧠",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+with st.sidebar:
+    st.image(...)
+    st.title(...)
+    ...
+    st.divider()
+    run_btn = st.button(...)
+    clear_btn = st.button(...)
 
+    st.divider()
+    st.caption("⭐ Causal Intelligence Engine")
+    st.caption("Exceptional Feature...")
+
+    # ✅ ADD THIS BELOW ↓
+    st.divider()
+    st.markdown("## 🤖 Choose AI Provider")
+
+    from multi_ai import MultiAIProvider
+    available = MultiAIProvider.get_available()
+
+    if not available:
+        st.error("❌ No API keys found in .env!")
+    else:
+        provider_options = {
+            f"{info['icon']} {info['name']}": key
+            for key, info in available.items()
+        }
+        selected_label = st.selectbox(
+            "AI Provider",
+            options=list(provider_options.keys())
+        )
+        selected_provider = provider_options[selected_label]
+        available_models = MultiAIProvider.PROVIDERS[selected_provider]["models"]
+        selected_model = st.selectbox("Model", options=available_models)
+        st.success(f"✅ {selected_label}\n\n📦 `{selected_model}`")
+
+        st.session_state["ai_provider"] = selected_provider
+        st.session_state["ai_model"] = selected_model
+
+        if st.button("🧪 Test AI Connection"):
+            with st.spinner("Testing..."):
+                ai = MultiAIProvider(
+                    provider=selected_provider,
+                    model=selected_model
+                )
+                result = ai.generate(
+                    "Say hello in one line and tell your name.",
+                    max_tokens=100
+                )
+                st.info(f"💬 {result}")
 # ─────────────────────────────────────────────────────────────
 # SECTION 1 — CONNECT TO DATABASE
 # ─────────────────────────────────────────────────────────────
