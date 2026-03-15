@@ -8,7 +8,13 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 warnings.filterwarnings("ignore")
+# Line 1 - Add this at the very top
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Line 4 - Now this will work
+from multi_ai import MultiAIProvider
 import networkx as nx
 import numpy as np
 import pandas as pd
