@@ -19,7 +19,60 @@ import yaml
 from scipy.stats import chi2_contingency
 from sklearn.feature_selection import mutual_info_classif, mutual_info_regression
 from sqlalchemy import create_engine, inspect, text
+import streamlit as st
+from multi_ai import MultiAIProvider
 
+# ── Sidebar AI Selector ─────────────────────────────
+st.sidebar.markdown("---")
+st.sidebar.markdown("## 🤖 Choose AI Provider")
+
+providers = MultiAIProvider.PROVIDERS
+
+# Only show providers that have API key
+available = MultiAIProvider.get_available()
+
+if not available:
+    st.sidebar.error("❌ No API keys found in .env!")
+else:
+    # Provider selector
+    provider_options = {
+        f"{info['icon']} {info['name']}": key
+        for key, info in available.items()
+    }
+
+    selected_label = st.sidebar.selectbox(
+        "AI Provider",
+        options=list(provider_options.keys())
+    )
+
+    selected_provider = provider_options[selected_label]
+
+    # Model selector for chosen provider
+    available_models = providers[selected_provider]["models"]
+    selected_model = st.sidebar.selectbox(
+        "Model",
+        options=available_models
+    )
+
+    # Show status
+    st.sidebar.success(
+        f"✅ Using: {selected_label}\n\n📦 Model: `{selected_model}`"
+    )
+
+    # Initialize AI
+    ai = MultiAIProvider(
+        provider=selected_provider,
+        model=selected_model
+    )
+
+    # Test button
+    if st.sidebar.button("🧪 Test AI Connection"):
+        with st.spinner("Testing..."):
+            result = ai.generate(
+                "Say hello in one line and tell your name.",
+                max_tokens=100
+            )
+            st.sidebar.info(f"💬 {result}")
 # ─────────────────────────────────────────────────────────────
 # PAGE SETUP
 # ─────────────────────────────────────────────────────────────
