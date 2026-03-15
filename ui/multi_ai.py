@@ -21,7 +21,7 @@ class MultiAIProvider:
                 "claude-sonnet-4-20250514",
                 "claude-opus-4-20250514"
             ],
-            "env_key": "ANTHROPIC_API_KEY"
+            "env_key": "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"
         },
         "openai": {
             "name": "GPT (OpenAI)",
@@ -31,7 +31,7 @@ class MultiAIProvider:
                 "gpt-4o-mini",
                 "gpt-4-turbo"
             ],
-            "env_key": "OPENAI_API_KEY"
+            "env_key": "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"
         },
         "gemini": {
             "name": "Gemini (Google)",
@@ -41,7 +41,7 @@ class MultiAIProvider:
                 "gemini-1.5-pro",
                 "gemini-1.5-flash"
             ],
-            "env_key": "GOOGLE_API_KEY"
+            "env_key": "AIzaSyCHRr6uq4Q0rAKDoQ7VbYrpmf1-xehFqtk"
         },
         "groq": {
             "name": "Groq ⚡ (Free & Fast)",
@@ -52,7 +52,7 @@ class MultiAIProvider:
                 "mixtral-8x7b-32768",
                 "gemma2-9b-it"
             ],
-            "env_key": "GROQ_API_KEY"
+            "env_key": "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"
         }
     }
 
