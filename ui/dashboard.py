@@ -132,10 +132,11 @@ st.markdown(f"""
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class AI:
     PROVIDERS = {
-        "anthropic": {"name":"Claude","icon":"🟠","models":["claude-sonnet-4-20250514","claude-opus-4-20250514"],"key":"ANTHROPIC_API_KEY"},
-        "openai": {"name":"GPT-4o","icon":"🟢","models":["gpt-4o","gpt-4o-mini","gpt-4-turbo"],"key":"OPENAI_API_KEY"},
-        "gemini": {"name":"Gemini","icon":"🔵","models":["gemini-2.0-flash","gemini-1.5-pro"],"key":"GOOGLE_API_KEY"},
-        "groq": {"name":"Groq⚡","icon":"🟣","models":["llama-3.3-70b-versatile","llama-3.1-8b-instant","mixtral-8x7b-32768"],"key":"GROQ_API_KEY"},
+        "anthropic": {"name":"Claude","icon":"🟠","models":["claude-sonnet-4-20250514","claude-opus-4-20250514"],"key":"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"},
+        "openai": {"name":"GPT-4o","icon":"🟢","models":["gpt-4o","gpt-4o-mini","gpt-4-turbo"],"key":"sk-svcacct-CMaeBCQHRQFZEPpkosPPuI34_R2rtgG1L6nuqsy_klx4a0iqrAg7vgo3y-5MxRLWfrAGZ1ADSOxT3BlbkFJRtJfiteqlUFWoLLVxyZEftL3RKGrYn5k7sHLf5GUFiDZC-CgyjbGO8TIBL7gQ3l5rzu2Cej0engA
+"},
+        "gemini": {"name":"Gemini","icon":"🔵","models":["gemini-2.0-flash","gemini-1.5-pro"],"key":"AIzaSyDgAIlErzufpxgssvkMl3743btImO3TlX0"},
+        "groq": {"name":"Groq⚡","icon":"🟣","models":["llama-3.3-70b-versatile","llama-3.1-8b-instant","mixtral-8x7b-32768"],"key":"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"},
     }
 
     def __init__(self, provider=None, model=None):
