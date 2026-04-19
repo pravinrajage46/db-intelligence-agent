@@ -939,106 +939,81 @@ st.markdown(f"""
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# AI PROVIDER
+# AI PROVIDER  –  Single OpenRouter key
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-class AI:
-    PROVIDERS = {
-        "anthropic": {
-            "name": "Claude", "icon": "🟠",
-            "models": [
-                "claude-sonnet-4-20250514",
-                "claude-opus-4-20250514",
-            ],
-            "key": "ANTHROPIC_API_KEY",
-        },
-        "openai": {
-            "name": "GPT-4o", "icon": "🟢",
-            "models": ["gpt-4o", "gpt-4o-mini"],
-            "key": "OPENAI_API_KEY",
-        },
-        "gemini": {
-            "name": "Gemini", "icon": "🔵",
-            "models": ["gemini-2.0-flash", "gemini-1.5-pro"],
-            "key": "GOOGLE_API_KEY",
-        },
-        "groq": {
-            "name": "Groq", "icon": "🟣",
-            "models": [
-                "llama-3.3-70b-versatile",
-                "llama-3.1-8b-instant",
-                "mixtral-8x7b-32768",
-            ],
-            "key": "GROQ_API_KEY",
-        },
-    }
+import requests as _requests
 
-    def __init__(self, provider=None, model=None):
-        self.provider = provider or os.getenv(
-            "DEFAULT_AI_PROVIDER", "groq"
-        )
+OPENROUTER_BASE = "https://openrouter.ai/api/v1"
+
+OPENROUTER_MODELS = [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "meta-llama/llama-3.1-8b-instruct:free",
+    "google/gemini-2.0-flash-exp:free",
+    "openai/gpt-4o-mini",
+    "openai/gpt-4o",
+    "anthropic/claude-3.5-sonnet",
+    "anthropic/claude-3-haiku",
+    "google/gemini-flash-1.5",
+    "mistralai/mixtral-8x7b-instruct",
+    "deepseek/deepseek-chat",
+    "qwen/qwen-2.5-72b-instruct",
+]
+
+
+class AI:
+    def __init__(self, model: str = None, api_key: str = None):
         self.model = model or os.getenv(
             "DEFAULT_AI_MODEL",
-            self.PROVIDERS[self.provider]["models"][0],
+            OPENROUTER_MODELS[0],
         )
-        self.client = self._init()
-
-    def _init(self):
-        api_key = os.getenv(
-            self.PROVIDERS[self.provider]["key"]
+        self.api_key = (
+            api_key
+            or st.session_state.get("openrouter_api_key", "")
+            or os.getenv("OPENROUTER_API_KEY", "")
         )
-        if not api_key:
-            return None
-        if self.provider == "anthropic":
-            import anthropic
-            return anthropic.Anthropic(api_key=api_key)
-        elif self.provider == "openai":
-            from openai import OpenAI
-            return OpenAI(api_key=api_key)
-        elif self.provider == "gemini":
-            import google.generativeai as genai
-            genai.configure(api_key=api_key)
-            return genai.GenerativeModel(self.model)
-        elif self.provider == "groq":
-            from groq import Groq
-            return Groq(api_key=api_key)
 
-    def ask(self, prompt: str, max_tokens=1024) -> str:
-        if not self.client:
+    def ask(self, prompt: str, max_tokens: int = 1024) -> str:
+        if not self.api_key:
             return (
-                f"No API key for {self.provider}. "
-                f"Set {self.PROVIDERS[self.provider]['key']}"
-                " in .env"
+                "⚠️ No OpenRouter API key. "
+                "Enter it in the sidebar Settings panel."
             )
         try:
-            if self.provider == "anthropic":
-                r = self.client.messages.create(
-                    model=self.model, max_tokens=max_tokens,
-                    messages=[{
-                        "role": "user", "content": prompt
-                    }],
-                )
-                return r.content[0].text
-            elif self.provider in ("openai", "groq"):
-                r = self.client.chat.completions.create(
-                    model=self.model, max_tokens=max_tokens,
-                    messages=[{
-                        "role": "user", "content": prompt
-                    }],
-                )
-                return r.choices[0].message.content
-            elif self.provider == "gemini":
-                return self.client.generate_content(
-                    prompt
-                ).text
+            resp = _requests.post(
+                f"{OPENROUTER_BASE}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://db-intelligence-agent",
+                    "X-Title": "DB Intelligence Agent",
+                },
+                json={
+                    "model": self.model,
+                    "max_tokens": max_tokens,
+                    "messages": [
+                        {"role": "user", "content": prompt}
+                    ],
+                },
+                timeout=60,
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+        except _requests.exceptions.HTTPError as e:
+            return (
+                f"❌ OpenRouter error {e.response.status_code}: "
+                f"{e.response.text[:200]}"
+            )
         except Exception as e:
-            return f"AI Error ({self.provider}): {e}"
+            return f"❌ AI Error: {e}"
 
-    @classmethod
-    def available(cls):
-        return {
-            k: v for k, v in cls.PROVIDERS.items()
-            if os.getenv(v["key"])
-        }
+    # kept for backward compat
+    @staticmethod
+    def available():
+        key = (
+            st.session_state.get("openrouter_api_key", "")
+            or os.getenv("OPENROUTER_API_KEY", "")
+        )
+        return {"openrouter": True} if key else {}
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1729,7 +1704,110 @@ def build_zip(contracts, json_str, md, pdf_bytes=None):
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # PIPELINE
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def run_analysis(engine, provider, model, n_rows):
+def _build_pdf_fallback(schema, quality, health, causal, edges, ai_text, contracts):
+    """Simple text-based PDF using reportlab when WeasyPrint is unavailable."""
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import cm
+        from reportlab.platypus import (
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        )
+        from reportlab.lib import colors
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4,
+                                leftMargin=2*cm, rightMargin=2*cm,
+                                topMargin=2*cm, bottomMargin=2*cm)
+        styles = getSampleStyleSheet()
+        story = []
+
+        # Title
+        title_style = ParagraphStyle(
+            "title", parent=styles["Title"],
+            fontSize=22, spaceAfter=12
+        )
+        story.append(Paragraph("Database Intelligence Report", title_style))
+        story.append(Paragraph(
+            f"Generated: {datetime.now():%Y-%m-%d %H:%M}",
+            styles["Normal"]
+        ))
+        story.append(Spacer(1, 0.4*cm))
+
+        # AI Summary
+        if ai_text.get("schema"):
+            story.append(Paragraph("AI Summary", styles["Heading2"]))
+            story.append(Paragraph(ai_text["schema"], styles["Normal"]))
+            story.append(Spacer(1, 0.3*cm))
+
+        # Overview table
+        story.append(Paragraph("Database Overview", styles["Heading2"]))
+        avg_h = (
+            np.mean([h["score"] for h in health.values()])
+            if health else 0
+        )
+        ov_data = [
+            ["Tables", "Columns", "Rows", "Relations", "Causal", "Avg Health"],
+            [
+                str(schema["total_tables"]),
+                str(schema["total_columns"]),
+                f"{schema['total_rows']:,}",
+                str(len(edges)),
+                str(len(causal)),
+                f"{avg_h:.0f}/100",
+            ],
+        ]
+        ov_table = Table(ov_data, hAlign="LEFT")
+        ov_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#6c5ce7")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+             [colors.HexColor("#f8f9fa"), colors.white]),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#ddd")),
+            ("PADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(ov_table)
+        story.append(Spacer(1, 0.4*cm))
+
+        # Schema table
+        story.append(Paragraph("Schema & Health", styles["Heading2"]))
+        s_data = [["Table", "Rows", "Cols", "Health", "Score"]]
+        for n, t in schema["tables"].items():
+            h = health.get(n, {})
+            s_data.append([
+                n,
+                f"{t['row_count']:,}",
+                str(len(t["columns"])),
+                h.get("label", "-"),
+                f"{h.get('score', '-')}/100",
+            ])
+        s_table = Table(s_data, hAlign="LEFT")
+        s_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#6c5ce7")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+             [colors.HexColor("#f8f9fa"), colors.white]),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#ddd")),
+            ("PADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(s_table)
+        story.append(Spacer(1, 0.4*cm))
+
+        # AI Causal summary
+        if ai_text.get("causal"):
+            story.append(Paragraph("Causal Intelligence", styles["Heading2"]))
+            story.append(Paragraph(ai_text["causal"], styles["Normal"]))
+            story.append(Spacer(1, 0.3*cm))
+
+        doc.build(story)
+        buf.seek(0)
+        return buf.read()
+    except Exception:
+        return None
+
+
+def run_analysis(engine, model, api_key, n_rows):
     bar = st.progress(0)
     status = st.empty()
 
@@ -1762,9 +1840,9 @@ def run_analysis(engine, provider, model, n_rows):
     bar.progress(78)
     contracts = gen_contracts(schema, quality)
 
-    status.info("🤖 AI analysis...")
+    status.info("🤖 AI analysis (OpenRouter)...")
     bar.progress(84)
-    ai = AI(provider, model)
+    ai = AI(model, api_key)
     ai_text = {}
     tbl_info = {
         n: {
@@ -1799,16 +1877,27 @@ def run_analysis(engine, provider, model, n_rows):
             f"Columns: {json.dumps(col_list)}", 300
         )
 
-    status.info("📕 Building PDF (WeasyPrint)...")
+    status.info("📕 Building PDF...")
     bar.progress(90)
+    pdf_bytes = None
+    # Try WeasyPrint first, fall back to ReportLab
     try:
         pdf_bytes = build_pdf_weasy(
             schema, quality, health, causal,
             edges, ai_text, contracts,
         )
-    except Exception as e:
-        st.warning(f"PDF generation issue: {e}")
-        pdf_bytes = None
+    except Exception:
+        pass
+    if not pdf_bytes:
+        try:
+            pdf_bytes = _build_pdf_fallback(
+                schema, quality, health, causal,
+                edges, ai_text, contracts,
+            )
+        except Exception:
+            pass
+    if not pdf_bytes:
+        status.warning("⚠️ PDF unavailable (install weasyprint or reportlab)")
 
     status.info("📦 Packaging...")
     bar.progress(95)
@@ -1899,19 +1988,16 @@ def render_chatbot(R):
             f"SAMPLES:\n{sample_ctx[:3000]}\n"
             f"Be specific."
         )
-        prov = st.session_state.get(
-            "ai_provider",
-            os.getenv("DEFAULT_AI_PROVIDER", "groq"),
-        )
         mod = st.session_state.get(
             "ai_model",
-            os.getenv(
-                "DEFAULT_AI_MODEL",
-                "llama-3.3-70b-versatile"
-            ),
+            os.getenv("DEFAULT_AI_MODEL", OPENROUTER_MODELS[0]),
+        )
+        api_key = st.session_state.get(
+            "openrouter_api_key",
+            os.getenv("OPENROUTER_API_KEY", ""),
         )
         with st.spinner("Thinking..."):
-            resp = AI(prov, mod).ask(
+            resp = AI(mod, api_key).ask(
                 f"{ctx}\n\nQ: {inp}", 1500
             )
         st.session_state.chat.append({
@@ -1940,36 +2026,43 @@ with st.sidebar:
     </div>""", unsafe_allow_html=True)
     st.divider()
 
-    st.markdown("#### 🤖 AI Engine")
-    avail = AI.available()
-    if avail:
-        labels = {
-            f"{v['icon']} {v['name']}": k
-            for k, v in avail.items()
-        }
-        dp = os.getenv("DEFAULT_AI_PROVIDER", "groq")
-        dl = next(
-            (l for l, k in labels.items() if k == dp),
-            list(labels.keys())[0],
-        )
-        sl = st.selectbox(
-            "Provider", list(labels.keys()),
-            index=list(labels.keys()).index(dl),
-            label_visibility="collapsed",
-        )
-        sp = labels[sl]
-        models = AI.PROVIDERS[sp]["models"]
-        dm = os.getenv("DEFAULT_AI_MODEL", models[0])
-        sm = st.selectbox(
-            "Model", models,
-            index=models.index(dm) if dm in models else 0,
-            label_visibility="collapsed",
-        )
-        st.session_state["ai_provider"] = sp
-        st.session_state["ai_model"] = sm
-        st.success(f"✅ {sl} / `{sm}`")
+    st.markdown("#### 🤖 AI Engine (OpenRouter)")
+
+    # ── API Key input ──────────────────────────────────
+    saved_key = st.session_state.get(
+        "openrouter_api_key",
+        os.getenv("OPENROUTER_API_KEY", ""),
+    )
+    api_key_input = st.text_input(
+        "OpenRouter API Key",
+        value=saved_key,
+        type="password",
+        placeholder="sk-or-v1-…",
+        help="Get your free key at https://openrouter.ai/keys",
+    )
+    if api_key_input:
+        st.session_state["openrouter_api_key"] = api_key_input
+        st.success("✅ API key set")
     else:
-        st.error("No API keys in .env!")
+        st.warning("⚠️ Enter your OpenRouter API key")
+        st.markdown(
+            "[🔑 Get free key →](https://openrouter.ai/keys)",
+            unsafe_allow_html=False,
+        )
+
+    # ── Model selector ────────────────────────────────
+    dm = os.getenv("DEFAULT_AI_MODEL", OPENROUTER_MODELS[0])
+    sm = st.selectbox(
+        "Model",
+        OPENROUTER_MODELS,
+        index=(
+            OPENROUTER_MODELS.index(dm)
+            if dm in OPENROUTER_MODELS else 0
+        ),
+        label_visibility="collapsed",
+    )
+    st.session_state["ai_model"] = sm
+    st.caption(f"🤖 `{sm}`")
     st.divider()
 
     st.markdown("#### 📂 Data")
@@ -2038,19 +2131,16 @@ with st.sidebar:
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 if run and engine and ready:
     try:
-        prov = st.session_state.get(
-            "ai_provider",
-            os.getenv("DEFAULT_AI_PROVIDER", "groq"),
-        )
         mod = st.session_state.get(
             "ai_model",
-            os.getenv(
-                "DEFAULT_AI_MODEL",
-                "llama-3.3-70b-versatile",
-            ),
+            os.getenv("DEFAULT_AI_MODEL", OPENROUTER_MODELS[0]),
+        )
+        api_key = st.session_state.get(
+            "openrouter_api_key",
+            os.getenv("OPENROUTER_API_KEY", ""),
         )
         st.session_state["R"] = run_analysis(
-            engine, prov, mod, n_rows
+            engine, mod, api_key, n_rows
         )
     except Exception as e:
         st.error(f"Failed: {e}")
