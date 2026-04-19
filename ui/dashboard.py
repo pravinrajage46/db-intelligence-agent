@@ -939,8 +939,9 @@ st.markdown(f"""
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# AI PROVIDER  –  OpenAI ChatGPT + Google Gemini
+# AI PROVIDER  –  Local NLG + OpenAI ChatGPT + Google Gemini
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+from local_ai import LocalAI as _LocalAI
 
 OPENAI_MODELS = [
     "gpt-4o",
@@ -956,20 +957,29 @@ GOOGLE_MODELS = [
     "gemini-2.0-flash-lite",
 ]
 
-ALL_AI_MODELS = OPENAI_MODELS + GOOGLE_MODELS
+LOCAL_MODELS = ["local-nlg"]
+
+ALL_AI_MODELS = LOCAL_MODELS + OPENAI_MODELS + GOOGLE_MODELS
 
 
 def _provider_of(model: str) -> str:
-    return "google" if model in GOOGLE_MODELS else "openai"
+    if model in GOOGLE_MODELS:
+        return "google"
+    if model in LOCAL_MODELS:
+        return "local"
+    return "openai"
 
 
 class AI:
     def __init__(self, model: str = None, api_key: str = None):
         self.model = model or os.getenv(
-            "DEFAULT_AI_MODEL", "gpt-4o-mini"
+            "DEFAULT_AI_MODEL", "local-nlg"
         )
         self.provider = _provider_of(self.model)
-        if self.provider == "google":
+        if self.provider == "local":
+            self.api_key = "__local__"
+            self._local = _LocalAI()
+        elif self.provider == "google":
             self.api_key = (
                 api_key
                 or st.session_state.get("google_api_key", "")
@@ -983,6 +993,8 @@ class AI:
             )
 
     def ask(self, prompt: str, max_tokens: int = 1024) -> str:
+        if self.provider == "local":
+            return self._local.ask(prompt, max_tokens)
         if not self.api_key:
             return (
                 f"⚠️ No {self.provider.title()} API key. "
@@ -1027,7 +1039,7 @@ class AI:
 
     @staticmethod
     def available():
-        keys = {}
+        keys = {"local": True}  # local is always available
         if st.session_state.get("openai_api_key") or os.getenv("OPENAI_API_KEY"):
             keys["openai"] = True
         if st.session_state.get("google_api_key") or os.getenv("GOOGLE_API_KEY"):
@@ -1899,24 +1911,25 @@ def run_analysis(engine, model, api_key, n_rows):
     status.info("📕 Building PDF...")
     bar.progress(90)
     pdf_bytes = None
-    # Try WeasyPrint first, fall back to ReportLab
+    # Try ReportLab first (pure Python, always works)
     try:
-        pdf_bytes = build_pdf_weasy(
+        pdf_bytes = _build_pdf_fallback(
             schema, quality, health, causal,
             edges, ai_text, contracts,
         )
     except Exception:
         pass
+    # Fallback to WeasyPrint if ReportLab somehow failed
     if not pdf_bytes:
         try:
-            pdf_bytes = _build_pdf_fallback(
+            pdf_bytes = build_pdf_weasy(
                 schema, quality, health, causal,
                 edges, ai_text, contracts,
             )
         except Exception:
             pass
     if not pdf_bytes:
-        status.warning("⚠️ PDF unavailable (install weasyprint or reportlab)")
+        status.warning("⚠️ PDF generation failed — ensure reportlab is installed: pip install reportlab")
 
     status.info("📦 Packaging...")
     bar.progress(95)
@@ -2057,13 +2070,25 @@ with st.sidebar:
     # ── Provider selector ─────────────────────────────
     ai_provider = st.radio(
         "Provider",
-        ["OpenAI ChatGPT", "Google Gemini"],
-        horizontal=True,
+        ["🧠 Local AI (No API)", "OpenAI ChatGPT", "Google Gemini"],
+        horizontal=False,
         label_visibility="collapsed",
     )
     st.session_state["ai_provider"] = ai_provider
 
-    if ai_provider == "OpenAI ChatGPT":
+    if ai_provider == "🧠 Local AI (No API)":
+        st.success("✅ No API key needed!")
+        st.info(
+            "🧠 **Local NLG Engine** — fully offline, rule-based "
+            "AI that analyses your actual database metrics to "
+            "generate smart summaries without any external service."
+        )
+        model_list = LOCAL_MODELS
+        sm = LOCAL_MODELS[0]
+        st.session_state["ai_model"] = sm
+        st.caption("🧠 `local-nlg` (offline)")
+
+    elif ai_provider == "OpenAI ChatGPT":
         saved_key = st.session_state.get(
             "openai_api_key",
             os.getenv("OPENAI_API_KEY", ""),
@@ -2084,7 +2109,17 @@ with st.sidebar:
                 "[🔑 Get key →](https://platform.openai.com/api-keys)"
             )
         model_list = OPENAI_MODELS
-    else:
+        dm = os.getenv("DEFAULT_AI_MODEL", model_list[0])
+        sm = st.selectbox(
+            "Model",
+            model_list,
+            index=model_list.index(dm) if dm in model_list else 0,
+            label_visibility="collapsed",
+        )
+        st.session_state["ai_model"] = sm
+        st.caption(f"🤖 `{sm}`")
+
+    else:  # Google Gemini
         saved_key = st.session_state.get(
             "google_api_key",
             os.getenv("GOOGLE_API_KEY", ""),
@@ -2105,20 +2140,15 @@ with st.sidebar:
                 "[🔑 Get key →](https://aistudio.google.com/app/apikey)"
             )
         model_list = GOOGLE_MODELS
-
-    # ── Model selector ────────────────────────────────
-    dm = os.getenv("DEFAULT_AI_MODEL", model_list[0])
-    sm = st.selectbox(
-        "Model",
-        model_list,
-        index=(
-            model_list.index(dm)
-            if dm in model_list else 0
-        ),
-        label_visibility="collapsed",
-    )
-    st.session_state["ai_model"] = sm
-    st.caption(f"🤖 `{sm}`")
+        dm = os.getenv("DEFAULT_AI_MODEL", model_list[0])
+        sm = st.selectbox(
+            "Model",
+            model_list,
+            index=model_list.index(dm) if dm in model_list else 0,
+            label_visibility="collapsed",
+        )
+        st.session_state["ai_model"] = sm
+        st.caption(f"🤖 `{sm}`")
     st.divider()
 
     st.markdown("#### 📂 Data")
@@ -2189,10 +2219,12 @@ if run and engine and ready:
     try:
         mod = st.session_state.get(
             "ai_model",
-            os.getenv("DEFAULT_AI_MODEL", "gpt-4o-mini"),
+            os.getenv("DEFAULT_AI_MODEL", "local-nlg"),
         )
         provider = _provider_of(mod)
-        if provider == "google":
+        if provider == "local":
+            api_key = "__local__"
+        elif provider == "google":
             api_key = st.session_state.get(
                 "google_api_key",
                 os.getenv("GOOGLE_API_KEY", ""),
