@@ -939,81 +939,100 @@ st.markdown(f"""
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# AI PROVIDER  –  Single OpenRouter key
+# AI PROVIDER  –  OpenAI ChatGPT + Google Gemini
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-import requests as _requests
 
-OPENROUTER_BASE = "https://openrouter.ai/api/v1"
-
-OPENROUTER_MODELS = [
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "meta-llama/llama-3.1-8b-instruct:free",
-    "google/gemini-2.0-flash-exp:free",
-    "openai/gpt-4o-mini",
-    "openai/gpt-4o",
-    "anthropic/claude-3.5-sonnet",
-    "anthropic/claude-3-haiku",
-    "google/gemini-flash-1.5",
-    "mistralai/mixtral-8x7b-instruct",
-    "deepseek/deepseek-chat",
-    "qwen/qwen-2.5-72b-instruct",
+OPENAI_MODELS = [
+    "gpt-4o",
+    "gpt-4o-mini",
+    "gpt-4-turbo",
+    "gpt-3.5-turbo",
 ]
+
+GOOGLE_MODELS = [
+    "gemini-1.5-pro",
+    "gemini-1.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+]
+
+ALL_AI_MODELS = OPENAI_MODELS + GOOGLE_MODELS
+
+
+def _provider_of(model: str) -> str:
+    return "google" if model in GOOGLE_MODELS else "openai"
 
 
 class AI:
     def __init__(self, model: str = None, api_key: str = None):
         self.model = model or os.getenv(
-            "DEFAULT_AI_MODEL",
-            OPENROUTER_MODELS[0],
+            "DEFAULT_AI_MODEL", "gpt-4o-mini"
         )
-        self.api_key = (
-            api_key
-            or st.session_state.get("openrouter_api_key", "")
-            or os.getenv("OPENROUTER_API_KEY", "")
-        )
+        self.provider = _provider_of(self.model)
+        if self.provider == "google":
+            self.api_key = (
+                api_key
+                or st.session_state.get("google_api_key", "")
+                or os.getenv("GOOGLE_API_KEY", "")
+            )
+        else:
+            self.api_key = (
+                api_key
+                or st.session_state.get("openai_api_key", "")
+                or os.getenv("OPENAI_API_KEY", "")
+            )
 
     def ask(self, prompt: str, max_tokens: int = 1024) -> str:
         if not self.api_key:
             return (
-                "⚠️ No OpenRouter API key. "
+                f"⚠️ No {self.provider.title()} API key. "
                 "Enter it in the sidebar Settings panel."
             )
+        if self.provider == "openai":
+            return self._call_openai(prompt, max_tokens)
+        return self._call_google(prompt, max_tokens)
+
+    def _call_openai(self, prompt: str, max_tokens: int) -> str:
         try:
-            resp = _requests.post(
-                f"{OPENROUTER_BASE}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://db-intelligence-agent",
-                    "X-Title": "DB Intelligence Agent",
-                },
-                json={
-                    "model": self.model,
-                    "max_tokens": max_tokens,
-                    "messages": [
-                        {"role": "user", "content": prompt}
-                    ],
-                },
+            from openai import OpenAI
+            client = OpenAI(api_key=self.api_key)
+            resp = client.chat.completions.create(
+                model=self.model,
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": prompt}],
                 timeout=60,
             )
-            resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"]
-        except _requests.exceptions.HTTPError as e:
-            return (
-                f"❌ OpenRouter error {e.response.status_code}: "
-                f"{e.response.text[:200]}"
-            )
+            return resp.choices[0].message.content
+        except ImportError:
+            return "❌ Run: pip install openai"
         except Exception as e:
-            return f"❌ AI Error: {e}"
+            return f"❌ OpenAI Error: {e}"
 
-    # kept for backward compat
+    def _call_google(self, prompt: str, max_tokens: int) -> str:
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=self.api_key)
+            mdl = genai.GenerativeModel(self.model)
+            resp = mdl.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=max_tokens,
+                ),
+            )
+            return resp.text
+        except ImportError:
+            return "❌ Run: pip install google-generativeai"
+        except Exception as e:
+            return f"❌ Google Gemini Error: {e}"
+
     @staticmethod
     def available():
-        key = (
-            st.session_state.get("openrouter_api_key", "")
-            or os.getenv("OPENROUTER_API_KEY", "")
-        )
-        return {"openrouter": True} if key else {}
+        keys = {}
+        if st.session_state.get("openai_api_key") or os.getenv("OPENAI_API_KEY"):
+            keys["openai"] = True
+        if st.session_state.get("google_api_key") or os.getenv("GOOGLE_API_KEY"):
+            keys["google"] = True
+        return keys
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1840,7 +1859,7 @@ def run_analysis(engine, model, api_key, n_rows):
     bar.progress(78)
     contracts = gen_contracts(schema, quality)
 
-    status.info("🤖 AI analysis (OpenRouter)...")
+    status.info("🤖 AI analysis...")
     bar.progress(84)
     ai = AI(model, api_key)
     ai_text = {}
@@ -1990,12 +2009,19 @@ def render_chatbot(R):
         )
         mod = st.session_state.get(
             "ai_model",
-            os.getenv("DEFAULT_AI_MODEL", OPENROUTER_MODELS[0]),
+            os.getenv("DEFAULT_AI_MODEL", "gpt-4o-mini"),
         )
-        api_key = st.session_state.get(
-            "openrouter_api_key",
-            os.getenv("OPENROUTER_API_KEY", ""),
-        )
+        provider = _provider_of(mod)
+        if provider == "google":
+            api_key = st.session_state.get(
+                "google_api_key",
+                os.getenv("GOOGLE_API_KEY", ""),
+            )
+        else:
+            api_key = st.session_state.get(
+                "openai_api_key",
+                os.getenv("OPENAI_API_KEY", ""),
+            )
         with st.spinner("Thinking..."):
             resp = AI(mod, api_key).ask(
                 f"{ctx}\n\nQ: {inp}", 1500
@@ -2026,38 +2052,68 @@ with st.sidebar:
     </div>""", unsafe_allow_html=True)
     st.divider()
 
-    st.markdown("#### 🤖 AI Engine (OpenRouter)")
+    st.markdown("#### 🤖 AI Engine")
 
-    # ── API Key input ──────────────────────────────────
-    saved_key = st.session_state.get(
-        "openrouter_api_key",
-        os.getenv("OPENROUTER_API_KEY", ""),
+    # ── Provider selector ─────────────────────────────
+    ai_provider = st.radio(
+        "Provider",
+        ["OpenAI ChatGPT", "Google Gemini"],
+        horizontal=True,
+        label_visibility="collapsed",
     )
-    api_key_input = st.text_input(
-        "OpenRouter API Key",
-        value=saved_key,
-        type="password",
-        placeholder="sk-or-v1-…",
-        help="Get your free key at https://openrouter.ai/keys",
-    )
-    if api_key_input:
-        st.session_state["openrouter_api_key"] = api_key_input
-        st.success("✅ API key set")
-    else:
-        st.warning("⚠️ Enter your OpenRouter API key")
-        st.markdown(
-            "[🔑 Get free key →](https://openrouter.ai/keys)",
-            unsafe_allow_html=False,
+    st.session_state["ai_provider"] = ai_provider
+
+    if ai_provider == "OpenAI ChatGPT":
+        saved_key = st.session_state.get(
+            "openai_api_key",
+            os.getenv("OPENAI_API_KEY", ""),
         )
+        key_input = st.text_input(
+            "OpenAI API Key",
+            value=saved_key,
+            type="password",
+            placeholder="sk-…",
+            help="Get your key at https://platform.openai.com/api-keys",
+        )
+        if key_input:
+            st.session_state["openai_api_key"] = key_input
+            st.success("✅ OpenAI key set")
+        else:
+            st.warning("⚠️ Enter your OpenAI API key")
+            st.markdown(
+                "[🔑 Get key →](https://platform.openai.com/api-keys)"
+            )
+        model_list = OPENAI_MODELS
+    else:
+        saved_key = st.session_state.get(
+            "google_api_key",
+            os.getenv("GOOGLE_API_KEY", ""),
+        )
+        key_input = st.text_input(
+            "Google API Key",
+            value=saved_key,
+            type="password",
+            placeholder="AIza…",
+            help="Get your key at https://aistudio.google.com/app/apikey",
+        )
+        if key_input:
+            st.session_state["google_api_key"] = key_input
+            st.success("✅ Google key set")
+        else:
+            st.warning("⚠️ Enter your Google API key")
+            st.markdown(
+                "[🔑 Get key →](https://aistudio.google.com/app/apikey)"
+            )
+        model_list = GOOGLE_MODELS
 
     # ── Model selector ────────────────────────────────
-    dm = os.getenv("DEFAULT_AI_MODEL", OPENROUTER_MODELS[0])
+    dm = os.getenv("DEFAULT_AI_MODEL", model_list[0])
     sm = st.selectbox(
         "Model",
-        OPENROUTER_MODELS,
+        model_list,
         index=(
-            OPENROUTER_MODELS.index(dm)
-            if dm in OPENROUTER_MODELS else 0
+            model_list.index(dm)
+            if dm in model_list else 0
         ),
         label_visibility="collapsed",
     )
@@ -2133,12 +2189,19 @@ if run and engine and ready:
     try:
         mod = st.session_state.get(
             "ai_model",
-            os.getenv("DEFAULT_AI_MODEL", OPENROUTER_MODELS[0]),
+            os.getenv("DEFAULT_AI_MODEL", "gpt-4o-mini"),
         )
-        api_key = st.session_state.get(
-            "openrouter_api_key",
-            os.getenv("OPENROUTER_API_KEY", ""),
-        )
+        provider = _provider_of(mod)
+        if provider == "google":
+            api_key = st.session_state.get(
+                "google_api_key",
+                os.getenv("GOOGLE_API_KEY", ""),
+            )
+        else:
+            api_key = st.session_state.get(
+                "openai_api_key",
+                os.getenv("OPENAI_API_KEY", ""),
+            )
         st.session_state["R"] = run_analysis(
             engine, mod, api_key, n_rows
         )
