@@ -8,8 +8,8 @@ scipy
 scikit-learn
 pyyaml
 python-dotenv
-anthropic
-openai
-google-generativeai
-groq
+requests
+reportlab
 weasyprint
+openai>=1.0
+google-generativeai>=0.7
